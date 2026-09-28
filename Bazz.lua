@@ -1,8 +1,8 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
--- Drill Array + Core Charge | Auto Farm | Слоями вниз
--- + Watchdog (авто-восстановление) + Учёт радиуса
--- KEY: soprano2026
+-- Drill Array + Core Charge | Auto Farm
+-- + ClickSpaceMine + AutoMine + Watchdog
+-- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
 
@@ -14,7 +14,9 @@ local CONFIG = {
     DELAY     = 0.15,
     REST_WAIT = 30,
     TIMEOUT_SEC = 60,
-    WORLD_RESET_DELAY = 3,
+    WORLD_RESET_DELAY = 5,
+    WORLD_LOAD_MAX = 30,
+    AUTO_MINE_TRY = true,
     GREEN_MAX_Y = -60,
     RADIUS_GREEN_X = 1,
     RADIUS_GREEN_Z = 1,
@@ -28,14 +30,36 @@ local ORE_ID   = "Eclipse Onyx Gem"
 local ORE_NAME = "Eclipse Onyx"
 
 -- =====================
--- МОДУЛИ
+-- МОДУЛИ (безопасно)
 -- =====================
 local RS = game:GetService("ReplicatedStorage")
-local Network = RS:WaitForChild("Network")
+local Network = nil
+local AutoMineEnable = nil
+
+pcall(function()
+    Network = RS:WaitForChild("Network", 10)
+end)
+
+if Network then
+    pcall(function()
+        AutoMineEnable = Network:WaitForChild("AutoMine_Enable", 5)
+    end)
+end
+
 local Save = require(RS.Library.Client.Save)
 local Blocks = require(RS.Library.Types.Blocks)
 local BWC = require(RS.Library.Client.ToolCmds.BlockWorldClient)
-local Consume = Network:WaitForChild("Consumables_Consume")
+
+local Consume = nil
+if Network then
+    pcall(function()
+        Consume = Network:WaitForChild("Consumables_Consume", 10)
+    end)
+end
+
+if not Consume then
+    warn("Consumables_Consume не найден — бомбы не будут кидаться")
+end
 
 -- =====================
 -- БОМБЫ
@@ -81,7 +105,7 @@ local START_GREEN, START_YELLOW = countBombs("green"), countBombs("yellow")
 local START_ORE, START_TIME = countOre(), tick()
 
 -- =====================
--- RAYFIELD GUI (с ключом)
+-- RAYFIELD GUI (БЕЗ КЛЮЧА)
 -- =====================
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -94,21 +118,11 @@ local Window = Rayfield:CreateWindow({
         FolderName = "Bazz",
         FileName = "Config"
     },
-    KeySystem = true,
-    KeySettings = {
-        Title = "Bazz — Key",
-        Subtitle = "Введи ключ доступа",
-        Note = "Ключ у Bazz",
-        FileName = "BazzKey",
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {"soprano2026"}
-    },
     Keybind = "K"
 })
 
 -- =====================
--- ВКЛАДКА MAIN
+-- MAIN
 -- =====================
 local MainTab = Window:CreateTab("Main", 4483362458)
 
@@ -134,7 +148,6 @@ MainTab:CreateToggle({
             end
             Rayfield:Notify({Title="Стоп", Content="Фарм остановлен", Duration=3})
         end
-        print("Auto Farm:", v)
     end,
 })
 
@@ -178,8 +191,20 @@ MainTab:CreateButton({
     end,
 })
 
+MainTab:CreateButton({
+    Name = "⛏ Войти в шахту (Space Mine / AutoMine)",
+    Callback = function()
+        if getgenv().MagnusTryEnter then
+            getgenv().MagnusTryEnter()
+            Rayfield:Notify({Title="Вход", Content="Попытка входа в шахту...", Duration=3})
+        else
+            Rayfield:Notify({Title="Ошибка", Content="Функция недоступна", Duration=3})
+        end
+    end,
+})
+
 -- =====================
--- ВКЛАДКА SETTINGS
+-- SETTINGS
 -- =====================
 local SettingsTab = Window:CreateTab("Settings", 4483362458)
 
@@ -187,11 +212,8 @@ SettingsTab:CreateSection("Порог высоты")
 
 SettingsTab:CreateSlider({
     Name = "GREEN_MAX_Y",
-    Range = {-200, 0},
-    Increment = 1,
-    Suffix = "Y",
-    CurrentValue = -60,
-    Flag = "GreenMaxY",
+    Range = {-200, 0}, Increment = 1, Suffix = "Y",
+    CurrentValue = -60, Flag = "GreenMaxY",
     Callback = function(v) CONFIG.GREEN_MAX_Y = v end,
 })
 
@@ -219,10 +241,17 @@ SettingsTab:CreateSlider({
 })
 
 SettingsTab:CreateSlider({
-    Name = "WORLD_RESET_DELAY (пауза после рестарта)",
+    Name = "WORLD_RESET_DELAY",
     Range = {1, 30}, Increment = 1, Suffix = "с",
-    CurrentValue = 3, Flag = "WorldResetDelay",
+    CurrentValue = 5, Flag = "WorldResetDelay",
     Callback = function(v) CONFIG.WORLD_RESET_DELAY = v end,
+})
+
+SettingsTab:CreateSlider({
+    Name = "WORLD_LOAD_MAX",
+    Range = {5, 60}, Increment = 5, Suffix = "с",
+    CurrentValue = 30, Flag = "WorldLoadMax",
+    Callback = function(v) CONFIG.WORLD_LOAD_MAX = v end,
 })
 
 SettingsTab:CreateSlider({
@@ -232,7 +261,7 @@ SettingsTab:CreateSlider({
     Callback = function(v) CONFIG.TIMEOUT_SEC = v end,
 })
 
-SettingsTab:CreateSection("Радиус — ЗЕЛЁНЫЕ (Drill Array)")
+SettingsTab:CreateSection("Радиус — ЗЕЛЁНЫЕ")
 
 SettingsTab:CreateSlider({
     Name = "Green Width X", Range = {1, 10}, Increment = 1, Suffix = " блоков",
@@ -246,7 +275,7 @@ SettingsTab:CreateSlider({
     Callback = function(v) CONFIG.RADIUS_GREEN_Z = v end,
 })
 
-SettingsTab:CreateSection("Радиус — ЖЁЛТЫЕ (Core Charge)")
+SettingsTab:CreateSection("Радиус — ЖЁЛТЫЕ")
 
 SettingsTab:CreateSlider({
     Name = "Yellow Width X", Range = {1, 10}, Increment = 1, Suffix = " блоков",
@@ -261,7 +290,7 @@ SettingsTab:CreateSlider({
 })
 
 -- =====================
--- ВКЛАДКА STATS
+-- STATS
 -- =====================
 local StatsTab = Window:CreateTab("Stats", 4483362458)
 
@@ -332,6 +361,7 @@ local function tpGrid(x, y, z)
 end
 
 local function useBomb(key)
+    if not Consume then return end
     local uid = BOMB_UIDS[key]
     if not uid then return end
     pcall(function() Consume:InvokeServer(uid, 1) end)
@@ -351,14 +381,69 @@ local function getRadius(key)
     end
 end
 
+local function isWorldFullyLoaded(w)
+    if not w or not region then return false end
+    local cx = region.Min.X + 1
+    local cz = region.Min.Z + 1
+    local topY = region.Max.Y
+    local midY = math.floor((region.Max.Y + region.Min.Y) / 2)
+    local botY = region.Min.Y + 1
+    local hasTop = w:GetBlock(Vector3int16.new(cx, topY, cz))
+    local hasMid = w:GetBlock(Vector3int16.new(cx, midY, cz))
+    local hasBot = w:GetBlock(Vector3int16.new(cx, botY, cz))
+    return hasTop and hasMid and hasBot
+end
+
+local function clickSpaceMine()
+    local playerGui = LP:FindFirstChild("PlayerGui")
+    if not playerGui then return false end
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+            local txt = ""
+            pcall(function() txt = tostring(obj.Text) end)
+            if txt == "Space Mine!" or obj.Name == "Space Mine!" then
+                pcall(function() obj:Activate() end)
+                print("✅ Нажата кнопка Space Mine!")
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function tryEnterMine()
+    if not CONFIG.AUTO_MINE_TRY then return end
+    if clickSpaceMine() then
+        task.wait(3)
+        return
+    end
+    if AutoMineEnable then
+        pcall(function()
+            AutoMineEnable:FireServer()
+        end)
+        print("⛏ AutoMine_Enable вызван")
+    end
+end
+
+getgenv().MagnusTryEnter = tryEnterMine
+
 local function farmOnce()
     getgenv().statusText = "поиск мира..."
     world = nil
     local att = 0
-    repeat task.wait(0.2); world = BWC.GetLocal(); att = att + 1 until world or att > 60
+    repeat task.wait(0.2); world = BWC.GetLocal(); att = att + 1 until world or att > 30
+
+    if not world and CONFIG.AUTO_MINE_TRY then
+        getgenv().statusText = "не в шахте — пробую войти..."
+        tryEnterMine()
+        task.wait(3)
+        att = 0
+        repeat task.wait(0.2); world = BWC.GetLocal(); att = att + 1 until world or att > 30
+    end
+
     if not world then
-        getgenv().statusText = "мир не загрузился"
-        Rayfield:Notify({Title="Ошибка", Content="Мир не загрузился", Duration=5})
+        getgenv().statusText = "мир не загрузился (зайди в шахту)"
+        Rayfield:Notify({Title="Ошибка", Content="Мир не загрузился (зайди в шахту)", Duration=5})
         return false
     end
 
@@ -374,12 +459,35 @@ local function farmOnce()
     if not getgenv().curY or getgenv().lastWorld ~= savedWorld then
         getgenv().statusText = "новый мир — ждём "..CONFIG.WORLD_RESET_DELAY.."с"
         task.wait(CONFIG.WORLD_RESET_DELAY)
+
+        local waitStart = tick()
+        local loaded = false
+        while tick() - waitStart < CONFIG.WORLD_LOAD_MAX do
+            if BWC.GetLocal() ~= savedWorld then
+                getgenv().statusText = "мир сменился во время загрузки"
+                return true
+            end
+            if isWorldFullyLoaded(world) then
+                loaded = true
+                break
+            end
+            getgenv().statusText = "загрузка мира... "..math.floor(tick() - waitStart).."с"
+            task.wait(0.5)
+        end
+
+        if not loaded then
+            getgenv().statusText = "мир не загрузился за "..CONFIG.WORLD_LOAD_MAX.."с"
+            return true
+        end
+
+        task.wait(2)
+
         getgenv().curY = region.Max.Y
         getgenv().curX = region.Min.X
         getgenv().curZ = region.Min.Z
         getgenv().lastWorld = savedWorld
-        print("🔄 Новый мир — начинаю с Y="..getgenv().curY)
-        getgenv().statusText = "новый мир, Y="..getgenv().curY
+        print("🔄 Мир полностью загружен — начинаю с Y="..getgenv().curY)
+        getgenv().statusText = "мир загружен, Y="..getgenv().curY
     end
 
     local lastProgress = tick()
@@ -388,7 +496,6 @@ local function farmOnce()
         if not getgenv().MagnusRunning then return true end
 
         if BWC.GetLocal() ~= savedWorld then
-            print("🔁 Мир сменился — выхожу из farmOnce")
             getgenv().curX, getgenv().curY, getgenv().curZ = nil, nil, nil
             getgenv().lastWorld = nil
             getgenv().statusText = "мир сменился, перезапуск"
@@ -420,27 +527,33 @@ local function farmOnce()
                 end
 
                 if tick() - lastProgress > CONFIG.TIMEOUT_SEC then
-                    print("⏰ Таймаут "..CONFIG.TIMEOUT_SEC.." сек — выхожу")
                     getgenv().statusText = "таймаут, выхожу"
                     return true
                 end
 
-                local hasBlock = world:GetBlock(Vector3int16.new(getgenv().curX, getgenv().curY, getgenv().curZ))
+                local pos = Vector3int16.new(getgenv().curX, getgenv().curY, getgenv().curZ)
+                local hasBlock = world:GetBlock(pos)
+
                 if hasBlock then
-                    local key = getBombKey(getgenv().curY)
-                    local rX, rZ = getRadius(key)
+                    task.wait(0.3)
+                    if not world:GetBlock(pos) then
+                        getgenv().curZ = getgenv().curZ + 1
+                    else
+                        local key = getBombKey(getgenv().curY)
+                        local rX, rZ = getRadius(key)
 
-                    getgenv().statusText = string.format("фарм Y=%d X=%d Z=%d", getgenv().curY, getgenv().curX, getgenv().curZ)
+                        getgenv().statusText = string.format("фарм Y=%d X=%d Z=%d", getgenv().curY, getgenv().curX, getgenv().curZ)
 
-                    if not getHRP() then task.wait(0.1) end
-                    tpGrid(getgenv().curX, getgenv().curY, getgenv().curZ)
-                    task.wait(CONFIG.TP_SETTLE)
-                    useBomb(key)
-                    task.wait(CONFIG.DELAY)
+                        if not getHRP() then task.wait(0.1) end
+                        tpGrid(getgenv().curX, getgenv().curY, getgenv().curZ)
+                        task.wait(CONFIG.TP_SETTLE)
+                        useBomb(key)
+                        task.wait(CONFIG.DELAY)
 
-                    zStep = math.max(rX, rZ)
-                    getgenv().curZ = getgenv().curZ + zStep
-                    lastProgress = tick()
+                        zStep = math.max(rX, rZ)
+                        getgenv().curZ = getgenv().curZ + zStep
+                        lastProgress = tick()
+                    end
                 else
                     getgenv().curZ = getgenv().curZ + 1
                 end
@@ -453,7 +566,6 @@ local function farmOnce()
         getgenv().curY = getgenv().curY - 1
         getgenv().curX = region.Min.X
         getgenv().curZ = region.Min.Z
-        print("⛏ Слой: Y="..getgenv().curY)
         getgenv().statusText = "слой Y="..getgenv().curY
         lastProgress = tick()
     end
@@ -495,7 +607,6 @@ local function startFarm()
                             startTick = now
                             startX, startY, startZ = getgenv().curX, getgenv().curY, getgenv().curZ
                         elseif now - startTick > CONFIG.TIMEOUT_SEC then
-                            print("🐕 Watchdog: скрипт застрял — сбрасываю позицию")
                             getgenv().curX, getgenv().curY, getgenv().curZ = nil, nil, nil
                             getgenv().lastWorld = nil
                             startTick = now
@@ -511,27 +622,23 @@ local function startFarm()
             getgenv().statusText = "пауза "..CONFIG.REST_WAIT.."с"
             task.wait(CONFIG.REST_WAIT)
         end
-        print("⏹ Цикл фарма завершён")
     end)
 end
 
 local function stopFarm()
     getgenv().MagnusRunning = false
-    print("⏹ Остановлено (X="..tostring(getgenv().curX)..", Y="..tostring(getgenv().curY)..", Z="..tostring(getgenv().curZ)..")")
     getgenv().statusText = "остановлено"
 end
 
 local function resumeFarm()
     getgenv().MagnusRunning = true
     startFarm()
-    print("▶️ Возобновлено (X="..tostring(getgenv().curX)..", Y="..tostring(getgenv().curY)..", Z="..tostring(getgenv().curZ)..")")
     getgenv().statusText = "возобновлено"
 end
 
 local function resetPos()
     getgenv().curX, getgenv().curY, getgenv().curZ = nil, nil, nil
     getgenv().lastWorld = nil
-    print("🔄 Позиция сброшена")
     getgenv().statusText = "сброс позиции"
 end
 
@@ -552,4 +659,4 @@ game:GetService("UserInputService").InputBegan:Connect(function(i, g)
     end
 end)
 
-print("✅ BAZZ загружен. Ключ: soprano2026")
+print("✅ BAZZ загружен. БЕЗ КЛЮЧА.")
