@@ -303,7 +303,6 @@ local function farmOnce()
 
     if type(getgenv().curX) ~= "number" then getgenv().curX = region.Min.X end
     if type(getgenv().curY) ~= "number" then getgenv().curY = region.Max.Y end
-    if type(getgenv().curZ) ~= "number" then getgenv().curZ = region.Min.Z end
     -- ===========================================================
 
     local lastProgress = tick()
