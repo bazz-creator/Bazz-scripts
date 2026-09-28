@@ -1,6 +1,6 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
--- + АВТО-ВХОД + Фикс nil + number
+-- АВТО-ВХОД + фарм + фикс всех ошибок
 -- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
@@ -291,7 +291,7 @@ local function farmOnce()
 
     task.wait(2)
 
-    -- ============ ФИКС: проверка ВСЕХ трёх координат ============
+    -- Сброс позиции, если что-то равно nil
     if not getgenv().curY or not getgenv().curX or not getgenv().curZ then
         getgenv().curY = region.Max.Y
         getgenv().curX = region.Min.X
@@ -301,10 +301,9 @@ local function farmOnce()
         print("▶ Продолжаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
     end
 
-    if type(getgenv().curX) ~= "number" then getgenv().curX = region.Min.X end
-    if type(getgenv().curY) ~= "number" then getgenv().curY = region.Max.Y end
-    if type(getgenv().curZ) ~= "number" then getgenv().curZ = region.Min.Z end
-    -- ===========================================================
+    getgenv().curX = tonumber(getgenv().curX) or region.Min.X
+    getgenv().curY = tonumber(getgenv().curY) or region.Max.Y
+    getgenv().curZ = tonumber(getgenv().curZ) or region.Min.Z
 
     local lastProgress = tick()
 
