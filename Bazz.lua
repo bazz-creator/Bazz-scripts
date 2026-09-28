@@ -1,6 +1,7 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
 -- + АВТО-ВХОД + Правильный радиус + Защита от рестарта
+-- + ФИКС: проверка curX/curY/curZ (ошибка после рестарта)
 -- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
@@ -198,6 +199,7 @@ local function tp(pos)
 end
 
 local function tpGrid(x, y, z)
+    if not origin then return end
     local cf = Blocks.BlockCFrame(origin, Vector3int16.new(x, y, z))
     tp(cf.Position + Vector3.new(0, 3, 0))
 end
@@ -275,7 +277,6 @@ local function farmOnce()
         return false
     end
 
-    -- Запоминаем "подпись" мира для отслеживания рестарта
     local worldSignature = region.Max.Y
 
     getgenv().statusText = "прогрузка шахты..."
@@ -291,21 +292,27 @@ local function farmOnce()
 
     task.wait(2)
 
-    if not getgenv().curY then
+    -- ============ ФИКС: проверка ВСЕХ трёх координат ============
+    if not getgenv().curY or not getgenv().curX or not getgenv().curZ then
         getgenv().curY = region.Max.Y
         getgenv().curX = region.Min.X
         getgenv().curZ = region.Min.Z
-        print("🆕 Начинаю с Y="..getgenv().curY)
+        print("🆕 Начинаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
     else
-        print("▶ Продолжаю с Y="..getgenv().curY)
+        print("▶ Продолжаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
     end
+
+    -- Дополнительная защита: убеждаемся, что значения не nil
+    if type(getgenv().curX) ~= "number" then getgenv().curX = region.Min.X end
+    if type(getgenv().curY) ~= "number" then getgenv().curY = region.Max.Y end
+    if type(getgenv().curZ) ~= "number" then getgenv().curZ = region.Min.Z end
+    -- ===========================================================
 
     local lastProgress = tick()
 
     while getgenv().curY >= region.Min.Y do
         if not getgenv().MagnusRunning then return false end
 
-        -- Проверка: мир не сменился?
         local w = BWC.GetLocal()
         if not w then
             getgenv().statusText = "шахта пропала"
@@ -343,7 +350,6 @@ local function farmOnce()
                 local ok, hasBlock = pcall(function() return world:GetBlock(pos) end)
 
                 if ok and hasBlock then
-                    -- Двойная проверка (защита от пустоты)
                     task.wait(0.3)
                     local ok2, stillThere = pcall(function() return world:GetBlock(pos) end)
 
@@ -370,7 +376,6 @@ local function farmOnce()
                 end
             end
 
-            -- ✅ ИСПРАВЛЕНИЕ: используем zStep (радиус), а не +1
             xStep = zStep
             getgenv().curX = getgenv().curX + xStep
         end
