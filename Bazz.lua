@@ -1,6 +1,6 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
--- + АВТО-ВХОД + Убраны ложные проверки для iPhone
+-- + АВТО-ВХОД + Правильный радиус + Защита от рестарта
 -- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
@@ -239,10 +239,8 @@ end
 getgenv().BazzEnterMine = enterMine
 
 local function farmOnce()
-    -- Проверка мира
     world = BWC.GetLocal()
 
-    -- Авто-вход
     if not world then
         getgenv().statusText = "не в шахте — вход..."
         enterMine()
@@ -277,24 +275,22 @@ local function farmOnce()
         return false
     end
 
-    -- Ждём прогрузки текстур (важно для iPhone)
+    -- Запоминаем "подпись" мира для отслеживания рестарта
+    local worldSignature = region.Max.Y
+
     getgenv().statusText = "прогрузка шахты..."
     task.wait(CONFIG.WORLD_RESET_DELAY)
 
-    -- Проверяем верхний блок
     local cx = region.Min.X + 1
     local cz = region.Min.Z + 1
     local waitStart = tick()
     while tick() - waitStart < CONFIG.WORLD_LOAD_MAX do
-        if world:GetBlock(Vector3int16.new(cx, region.Max.Y, cz)) then
-            break
-        end
+        if world:GetBlock(Vector3int16.new(cx, region.Max.Y, cz)) then break end
         task.wait(0.5)
     end
 
     task.wait(2)
 
-    -- Инициализация позиции (только если её нет)
     if not getgenv().curY then
         getgenv().curY = region.Max.Y
         getgenv().curX = region.Min.X
@@ -306,11 +302,19 @@ local function farmOnce()
 
     local lastProgress = tick()
 
-    -- Основной фарм
     while getgenv().curY >= region.Min.Y do
         if not getgenv().MagnusRunning then return false end
-        if not BWC.GetLocal() then
+
+        -- Проверка: мир не сменился?
+        local w = BWC.GetLocal()
+        if not w then
             getgenv().statusText = "шахта пропала"
+            return false
+        end
+
+        local r = w:GetRegion()
+        if r and r.Max.Y ~= worldSignature then
+            getgenv().statusText = "мир сменился"
             return false
         end
 
@@ -320,11 +324,13 @@ local function farmOnce()
         end
 
         getgenv().curX = getgenv().curX or region.Min.X
+        local xStep = 1
 
         while getgenv().curX <= region.Max.X do
             if not getgenv().MagnusRunning then return false end
 
             getgenv().curZ = region.Min.Z
+            local zStep = 1
 
             while getgenv().curZ <= region.Max.Z do
                 if not getgenv().MagnusRunning then return false end
@@ -337,25 +343,36 @@ local function farmOnce()
                 local ok, hasBlock = pcall(function() return world:GetBlock(pos) end)
 
                 if ok and hasBlock then
-                    local key = getBombKey(getgenv().curY)
-                    local rX, rZ = getRadius(key)
+                    -- Двойная проверка (защита от пустоты)
+                    task.wait(0.3)
+                    local ok2, stillThere = pcall(function() return world:GetBlock(pos) end)
 
-                    getgenv().statusText = string.format("фарм Y=%d X=%d Z=%d", getgenv().curY, getgenv().curX, getgenv().curZ)
+                    if ok2 and stillThere then
+                        local key = getBombKey(getgenv().curY)
+                        local rX, rZ = getRadius(key)
 
-                    if not getHRP() then task.wait(0.1) end
-                    tpGrid(getgenv().curX, getgenv().curY, getgenv().curZ)
-                    task.wait(CONFIG.TP_SETTLE)
-                    useBomb(key)
-                    task.wait(CONFIG.DELAY)
+                        getgenv().statusText = string.format("фарм Y=%d X=%d Z=%d", getgenv().curY, getgenv().curX, getgenv().curZ)
 
-                    getgenv().curZ = getgenv().curZ + math.max(rX, rZ)
-                    lastProgress = tick()
+                        if not getHRP() then task.wait(0.1) end
+                        tpGrid(getgenv().curX, getgenv().curY, getgenv().curZ)
+                        task.wait(CONFIG.TP_SETTLE)
+                        useBomb(key)
+                        task.wait(CONFIG.DELAY)
+
+                        zStep = math.max(rX, rZ)
+                        getgenv().curZ = getgenv().curZ + zStep
+                        lastProgress = tick()
+                    else
+                        getgenv().curZ = getgenv().curZ + 1
+                    end
                 else
                     getgenv().curZ = getgenv().curZ + 1
                 end
             end
 
-            getgenv().curX = getgenv().curX + 1
+            -- ✅ ИСПРАВЛЕНИЕ: используем zStep (радиус), а не +1
+            xStep = zStep
+            getgenv().curX = getgenv().curX + xStep
         end
 
         getgenv().curY = getgenv().curY - 1
@@ -365,7 +382,6 @@ local function farmOnce()
         lastProgress = tick()
     end
 
-    -- Шахта пройдена
     getgenv().curX, getgenv().curY, getgenv().curZ = nil, nil, nil
     getgenv().statusText = "цикл завершён"
     return false
