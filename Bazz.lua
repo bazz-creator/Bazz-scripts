@@ -1,6 +1,7 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
--- + AutoMine + Сохранение координат + Автозапуск
+-- + АВТО-ВХОД через Instancing_PlayerEnterInstance
+-- + Watchdog + Слоями вниз + Автозапуск
 -- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
@@ -23,7 +24,6 @@ local CONFIG = {
 
 local ORE_ID   = "Eclipse Onyx Gem"
 local ORE_NAME = "Eclipse Onyx"
-local MINE_POS_FILE = "Bazz_mine.txt"
 
 local RS = game:GetService("ReplicatedStorage")
 local Network = nil
@@ -38,48 +38,14 @@ if Network then
     pcall(function() Consume = Network:WaitForChild("Consumables_Consume", 10) end)
 end
 
-local AutoMineEnable = nil
+-- =============== ГЛАВНОЕ: ФУНКЦИЯ ВХОДА В ШАХТУ ===============
+local EnterInstance = nil
 if Network then
     pcall(function()
-        AutoMineEnable = Network:WaitForChild("AutoMine_Enable", 10)
+        EnterInstance = Network:WaitForChild("Instancing_PlayerEnterInstance", 10)
     end)
 end
-
-local function writeFileSafe(name, data)
-    pcall(function() if writefile then writefile(name, data) end end)
-end
-
-local function readFileSafe(name)
-    local result = nil
-    pcall(function()
-        if readfile and isfile and isfile(name) then result = readfile(name) end
-    end)
-    return result
-end
-
-local function deleteFileSafe(name)
-    pcall(function()
-        if delfile and isfile and isfile(name) then delfile(name) end
-    end)
-end
-
-local function saveMinePosition()
-    local c = game.Players.LocalPlayer.Character
-    if not c then return end
-    local hrp = c:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    if not BWC.GetLocal() then return end
-    local pos = hrp.Position
-    writeFileSafe(MINE_POS_FILE, string.format("%f,%f,%f", pos.X, pos.Y, pos.Z))
-end
-
-local function loadMinePosition()
-    local data = readFileSafe(MINE_POS_FILE)
-    if not data then return nil end
-    local x, y, z = data:match("([^,]+),([^,]+),([^,]+)")
-    if x and y and z then return Vector3.new(tonumber(x), tonumber(y), tonumber(z)) end
-    return nil
-end
+-- =============================================================
 
 local BOMB_UIDS = { green = nil, yellow = nil }
 
@@ -121,6 +87,9 @@ repeat task.wait(0.1) until Save.Get() and Save.Get().Inventory and Save.Get().I
 local START_GREEN, START_YELLOW = countBombs("green"), countBombs("yellow")
 local START_ORE, START_TIME = countOre(), tick()
 
+-- =====================
+-- RAYFIELD GUI
+-- =====================
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -161,17 +130,12 @@ MainTab:CreateToggle({Name="Force Yellow (Core Charge)", CurrentValue=false, Fla
 MainTab:CreateSection("Управление")
 MainTab:CreateButton({Name="🔄 Сброс позиции фарма", Callback=function()
     getgenv().MagnusResetPos()
-    deleteFileSafe("Bazz_farm.txt")
     Rayfield:Notify({Title="Сброс", Content="Позиция сброшена", Duration=3})
 end})
-MainTab:CreateButton({Name="📍 Сброс сохранённой шахты", Callback=function()
-    deleteFileSafe(MINE_POS_FILE)
-    Rayfield:Notify({Title="Сброс", Content="Позиция шахты сброшена", Duration=3})
-end})
-MainTab:CreateButton({Name="⛏ Войти в шахту (AutoMine)", Callback=function()
-    if getgenv().BazzTryEnter then
-        getgenv().BazzTryEnter()
-        Rayfield:Notify({Title="Вход", Content="Попытка входа...", Duration=3})
+MainTab:CreateButton({Name="⛏ Войти в шахту", Callback=function()
+    if getgenv().BazzEnterMine then
+        getgenv().BazzEnterMine()
+        Rayfield:Notify({Title="Вход", Content="Вызов входа в шахту...", Duration=3})
     end
 end})
 
@@ -278,28 +242,34 @@ local function isWorldFullyLoaded(w)
     return hasTop and hasMid and hasBot
 end
 
-local function tryEnterMine()
-    if not AutoMineEnable then
-        warn("⚠ AutoMine_Enable не найден")
+-- =============== ФУНКЦИЯ ВХОДА ===============
+local function enterMine()
+    if not EnterInstance then
+        warn("⚠ Instancing_PlayerEnterInstance не найден")
         return false
     end
-    local ok = pcall(function() AutoMineEnable:FireServer() end)
-    if ok then
-        print("⛏ AutoMine_Enable вызван")
+    local ok, result = pcall(function()
+        return EnterInstance:InvokeServer("SpaceMiningEvent")
+    end)
+    if ok and result then
+        print("⛏ Вход в Mine Event выполнен:", result)
         getgenv().statusText = "вход в Mine Event..."
         return true
     end
+    warn("⚠ Ошибка входа:", result)
     return false
 end
 
-getgenv().BazzTryEnter = tryEnterMine
+getgenv().BazzEnterMine = enterMine
+-- ============================================
 
 local function farmOnce()
     world = BWC.GetLocal()
 
+    -- =============== АВТО-ВХОД ===============
     if not world then
-        getgenv().statusText = "вход в Mine Event..."
-        tryEnterMine()
+        getgenv().statusText = "не в шахте — вход..."
+        enterMine()
 
         local deadline = tick() + CONFIG.WORLD_LOAD_MAX
         repeat
@@ -310,23 +280,12 @@ local function farmOnce()
         until tick() >= deadline
 
         if not world then
-            local savedMine = loadMinePosition()
-            if savedMine then
-                getgenv().statusText = "возврат по сохранённым координатам..."
-                print("🔙 Попытка возврата: "..tostring(savedMine))
-                tp(savedMine)
-                task.wait(3)
-                local deadline2 = tick() + 10
-                repeat task.wait(0.3); world = BWC.GetLocal() until world or tick() >= deadline2
-            end
-        end
-
-        if not world then
-            getgenv().statusText = "не удалось войти в Mine Event"
-            Rayfield:Notify({Title="Mine Event", Content="Не удалось автоматически войти", Duration=8})
+            getgenv().statusText = "не удалось войти"
+            Rayfield:Notify({Title="Ошибка", Content="Не удалось войти в шахту", Duration=8})
             return false
         end
     end
+    -- ==========================================
 
     print("✅ Шахта найдена")
 
@@ -338,13 +297,6 @@ local function farmOnce()
 
     region, origin = world:GetRegion(), world:GetOrigin()
     local savedWorld = world
-
-    task.spawn(function()
-        while getgenv().MagnusRunning do
-            task.wait(5)
-            if BWC.GetLocal() then saveMinePosition() end
-        end
-    end)
 
     if not getgenv().curY or getgenv().lastWorld ~= savedWorld then
         getgenv().statusText = "новый мир — ждём "..CONFIG.WORLD_RESET_DELAY.."с"
@@ -445,7 +397,7 @@ local function farmOnce()
 
     getgenv().curX, getgenv().curY, getgenv().curZ = nil, nil, nil
     getgenv().lastWorld = nil
-    getgenv().statusText = "цикл завершён"
+    getgenv().statusText = "цикл завершён — вход заново"
     return false
 end
 
