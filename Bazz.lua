@@ -1,7 +1,6 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
--- АВТО-ВХОД + фарм + УСКОРЕНО
--- БЕЗ АВТОЗАПУСКА
+-- АВТО-ВХОД + фарм + БЕЗ АВТОЗАПУСКА
 -- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
@@ -224,17 +223,17 @@ end
 
 local function enterMine()
     if not EnterInstance then
-        warn("⚠ Instancing_PlayerEnterInstance не найден")
+        warn("Instancing_PlayerEnterInstance не найден")
         return false
     end
     local ok, result = pcall(function()
         return EnterInstance:InvokeServer("SpaceMiningEvent")
     end)
     if ok and result then
-        print("⛏ Вход выполнен:", result)
+        print("Вход выполнен:", result)
         return true
     end
-    warn("⚠ Ошибка входа:", result)
+    warn("Ошибка входа:", result)
     return false
 end
 
@@ -262,7 +261,7 @@ local function farmOnce()
         end
     end
 
-    print("✅ Шахта найдена")
+    print("Шахта найдена")
 
     if not findBombUIDs() then
         getgenv().statusText = "бомбы не найдены"
@@ -296,9 +295,9 @@ local function farmOnce()
         getgenv().curY = region.Max.Y
         getgenv().curX = region.Min.X
         getgenv().curZ = region.Min.Z
-        print("🆕 Начинаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
+        print("Начинаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
     else
-        print("▶ Продолжаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
+        print("Продолжаю с Y="..getgenv().curY.." X="..getgenv().curX.." Z="..getgenv().curZ)
     end
 
     getgenv().curX = tonumber(getgenv().curX) or region.Min.X
@@ -428,9 +427,6 @@ getgenv().MagnusStop = stopFarm
 getgenv().MagnusResume = resumeFarm
 getgenv().MagnusResetPos = resetPos
 
--- АВТОЗАПУСК УБРАН
--- Скрипт загрузился → ждёт нажатия "Auto Farm" в GUI
-
 game:GetService("UserInputService").InputBegan:Connect(function(i, g)
     if not g and i.KeyCode == Enum.KeyCode.T then
         if getgenv().MagnusRunning then
@@ -443,4 +439,4 @@ game:GetService("UserInputService").InputBegan:Connect(function(i, g)
     end
 end)
 
-print("✅ BAZZ загружен. БЕЗ КЛЮЧА. Нажми 'Auto Farm' в GUI.")
+print("BAZZ загружен. БЕЗ КЛЮЧА. Нажми 'Auto Farm' в GUI.")
