@@ -1,13 +1,14 @@
 -- ==========================================
 -- BAZZ — ECLIPSE RIFT (RAYFIELD GUI)
--- АВТО-ВХОД + фарм + фикс всех ошибок
+-- АВТО-ВХОД + фарм + УСКОРЕНО
+-- БЕЗ АВТОЗАПУСКА
 -- БЕЗ КЛЮЧА
 -- ==========================================
 print("🚀 BAZZ")
 
 local CONFIG = {
-    TP_SETTLE = 0.1,
-    DELAY     = 0.15,
+    TP_SETTLE = 0.05,
+    DELAY     = 0.08,
     REST_WAIT = 10,
     TIMEOUT_SEC = 120,
     WORLD_RESET_DELAY = 8,
@@ -18,7 +19,7 @@ local CONFIG = {
     RADIUS_YELLOW_X = 3,
     RADIUS_YELLOW_Z = 3,
     FORCE_BOMB = "auto",
-    AUTO_FARM = true,
+    AUTO_FARM = false,
 }
 
 local ORE_ID   = "Eclipse Onyx Gem"
@@ -99,7 +100,7 @@ MainTab:CreateSection("Фарм")
 
 MainTab:CreateToggle({
     Name = "Auto Farm",
-    CurrentValue = true,
+    CurrentValue = false,
     Flag = "AutoFarm",
     Callback = function(v)
         CONFIG.AUTO_FARM = v
@@ -136,9 +137,9 @@ end})
 local SettingsTab = Window:CreateTab("Settings", 4483362458)
 SettingsTab:CreateSection("Порог высоты")
 SettingsTab:CreateSlider({Name="GREEN_MAX_Y", Range={-200,0}, Increment=1, Suffix="Y", CurrentValue=-60, Flag="GreenMaxY", Callback=function(v) CONFIG.GREEN_MAX_Y=v end})
-SettingsTab:CreateSection("Задержки")
-SettingsTab:CreateSlider({Name="DELAY", Range={0.05,1}, Increment=0.05, Suffix="с", CurrentValue=0.15, Flag="Delay", Callback=function(v) CONFIG.DELAY=v end})
-SettingsTab:CreateSlider({Name="TP_SETTLE", Range={0.05,1}, Increment=0.05, Suffix="с", CurrentValue=0.1, Flag="TPSettle", Callback=function(v) CONFIG.TP_SETTLE=v end})
+SettingsTab:CreateSection("Задержки (чем меньше — тем быстрее)")
+SettingsTab:CreateSlider({Name="DELAY (после броска)", Range={0.02,1}, Increment=0.01, Suffix="с", CurrentValue=0.08, Flag="Delay", Callback=function(v) CONFIG.DELAY=v end})
+SettingsTab:CreateSlider({Name="TP_SETTLE (после телепорта)", Range={0.02,1}, Increment=0.01, Suffix="с", CurrentValue=0.05, Flag="TPSettle", Callback=function(v) CONFIG.TP_SETTLE=v end})
 SettingsTab:CreateSlider({Name="REST_WAIT", Range={5,300}, Increment=5, Suffix="с", CurrentValue=10, Flag="RestWait", Callback=function(v) CONFIG.REST_WAIT=v end})
 
 local StatsTab = Window:CreateTab("Stats", 4483362458)
@@ -291,7 +292,6 @@ local function farmOnce()
 
     task.wait(2)
 
-    -- Сброс позиции, если что-то равно nil
     if not getgenv().curY or not getgenv().curX or not getgenv().curZ then
         getgenv().curY = region.Max.Y
         getgenv().curX = region.Min.X
@@ -347,7 +347,7 @@ local function farmOnce()
                 local ok, hasBlock = pcall(function() return world:GetBlock(pos) end)
 
                 if ok and hasBlock then
-                    task.wait(0.3)
+                    task.wait(0.15)
                     local ok2, stillThere = pcall(function() return world:GetBlock(pos) end)
 
                     if ok2 and stillThere then
@@ -428,14 +428,8 @@ getgenv().MagnusStop = stopFarm
 getgenv().MagnusResume = resumeFarm
 getgenv().MagnusResetPos = resetPos
 
-task.spawn(function()
-    repeat task.wait(0.2) until game:IsLoaded()
-    repeat task.wait(0.2) until LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    task.wait(2)
-    CONFIG.AUTO_FARM = true
-    resumeFarm()
-    Rayfield:Notify({Title="Bazz", Content="Автофарм запущен", Duration=4})
-end)
+-- АВТОЗАПУСК УБРАН
+-- Скрипт загрузился → ждёт нажатия "Auto Farm" в GUI
 
 game:GetService("UserInputService").InputBegan:Connect(function(i, g)
     if not g and i.KeyCode == Enum.KeyCode.T then
@@ -449,4 +443,4 @@ game:GetService("UserInputService").InputBegan:Connect(function(i, g)
     end
 end)
 
-print("✅ BAZZ загружен. БЕЗ КЛЮЧА.")
+print("✅ BAZZ загружен. БЕЗ КЛЮЧА. Нажми 'Auto Farm' в GUI.")
