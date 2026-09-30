@@ -35,11 +35,11 @@ local State = {
 }
 
 local RayfieldSuccess, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://raw.githubusercontent.com/UI-Library/Rayfield/main/source.lua'))()
+    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 end)
 
 if not RayfieldSuccess or not Rayfield then
-    warn("[BAZZ] Ошибка загрузки Rayfield UI.")
+    warn("[BAZZ] Ошибка загрузки Rayfield UI. Проверьте интернет или ссылку.")
     return
 end
 
@@ -56,7 +56,10 @@ local SettingsTab = Window:CreateTab("Настройки", 4483362458)
 local StatsTab = Window:CreateTab("Статистика", 4483362458)
 local LogTab = Window:CreateTab("Логи", 4483362458)
 
-local LogParagraph = LogTab:CreateParagraph({ Title = "Системные логи", Content = "Ожидание запуска..." })
+local LogParagraph = LogTab:CreateParagraph({
+    Title = "Системные логи",
+    Content = "Ожидание запуска..."
+})
 
 local function updateLogUI()
     LogParagraph:Set({ Title = "Системные логи", Content = table.concat(LOGS, "\n") })
@@ -68,8 +71,6 @@ local function findNearestBlock()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local rootPos = char.HumanoidRootPart.Position
-
-    -- ВАЖНО: Измените Workspace.Blocks на название папки с рудой в вашей игре
     local blocksFolder = Workspace:FindFirstChild("Blocks") or Workspace:FindFirstChild("Ores") or Workspace
     for _, block in ipairs(blocksFolder:GetChildren()) do
         if block:IsA("BasePart") and block.Name ~= "Baseplate" then
@@ -87,7 +88,6 @@ local function checkBombs()
     local char = LocalPlayer.Character
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if not char or not backpack then return false end
-
     local hasBomb = false
     for _, name in ipairs(CONFIG.BOMB_NAMES) do
         if char:FindFirstChild(name) or backpack:FindFirstChild(name) then
@@ -106,7 +106,6 @@ end
 
 local function attemptAutoSell()
     if not CONFIG.AUTO_SELL then return end
-    -- ВАЖНО: Вставьте сюда код продажи для вашей игры
     logMessage("Попытка авто-продажи...")
     task.wait(0.5)
 end
@@ -133,14 +132,12 @@ end
 local function farmLoop()
     logMessage("Запуск цикла фарма...")
     State.Status = "Фарм"
-    
     while State.IsRunning do
         if not checkBombs() then
             State.IsRunning = false
             State.Status = "Остановлено (нет бомб)"
             break
         end
-
         local targetBlock = findNearestBlock()
         if targetBlock then
             logMessage("Найден блок: " .. targetBlock.Name)
@@ -150,7 +147,6 @@ local function farmLoop()
             logMessage("Блоки не найдены в радиусе. Ожидание...")
             task.wait(2)
         end
-
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
             State.CurrentY = math.floor(char.HumanoidRootPart.Position.Y)
@@ -158,14 +154,12 @@ local function farmLoop()
                 logMessage("Обнаружен телепорт наверх! Рестарт...")
                 saveCurrentPosition()
                 attemptAutoSell()
-                
                 if CONFIG.AUTO_RESTART then
                     State.IsRunning = false
                     task.wait(2)
                 end
             end
         end
-        
         task.wait(CONFIG.DELAY)
     end
     logMessage("Цикл фарма остановлен.")
