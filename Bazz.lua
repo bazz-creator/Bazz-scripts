@@ -1,26 +1,18 @@
---[[
-    BAZZ — ECLIPSE RIFT FINAL v8 (MAX EDITION)
-    Обновление: Исправлены ошибки, добавлены логи, авто-продажа, поиск ближайшего блока,
-    сохранение позиции, проверка бомб, улучшенный GUI и кнопка Стоп.
-]]
-
--- ==================== 1. СЕРВИСЫ И КОНФИГ ====================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
 local CONFIG = {
-    DELAY = 0.1,             -- Базовая задержка
-    GREEN_MAX_Y = -50,       -- Порог высоты для смены бомбы
-    AUTO_SELL = true,        -- Включить авто-продажу (если поддерживается)
-    AUTO_RESTART = true,     -- Авто-рестарт при телепорте наверх
-    SAVE_POSITION = true,    -- Сохранять позицию перед рестартом
-    SEARCH_RADIUS = 500,     -- Радиус поиска ближайшего блока
-    BOMB_NAMES = {"Bomb", "TNT", "Dynamite", "Explosive"} -- Имена бомб в инвентаре
+    DELAY = 0.1,
+    GREEN_MAX_Y = -50,
+    AUTO_SELL = true,
+    AUTO_RESTART = true,
+    SAVE_POSITION = true,
+    SEARCH_RADIUS = 500,
+    BOMB_NAMES = {"Bomb", "TNT", "Dynamite", "Explosive"}
 }
 
--- ==================== 2. СИСТЕМА ЛОГИРОВАНИЯ ====================
 local LOGS = {}
 local MAX_LOGS = 50
 
@@ -29,11 +21,10 @@ local function logMessage(msg)
     local formatted = string.format("[%s] %s", timestamp, msg)
     table.insert(LOGS, formatted)
     if #LOGS > MAX_LOGS then table.remove(LOGS, 1) end
-    print(formatted) -- Дублируем в консоль разработчика (F9)
+    print(formatted)
     return table.concat(LOGS, "\n")
 end
 
--- ==================== 3. СОСТОЯНИЕ СКРИПТА ====================
 local State = {
     IsRunning = false,
     CurrentY = 0,
@@ -43,13 +34,12 @@ local State = {
     Status = "Ожидание"
 }
 
--- ==================== 4. ЗАГРУЗКА RAYFIELD (С ЗАЩИТОЙ) ====================
 local RayfieldSuccess, Rayfield = pcall(function()
     return loadstring(game:HttpGet('https://raw.githubusercontent.com/UI-Library/Rayfield/main/source.lua'))()
 end)
 
 if not RayfieldSuccess or not Rayfield then
-    warn("[BAZZ] Ошибка загрузки Rayfield UI. Проверьте интернет или ссылку.")
+    warn("[BAZZ] Ошибка загрузки Rayfield UI.")
     return
 end
 
@@ -61,22 +51,17 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- ==================== 5. ВКЛАДКИ GUI ====================
 local MainTab = Window:CreateTab("Главная", 4483362458)
 local SettingsTab = Window:CreateTab("Настройки", 4483362458)
 local StatsTab = Window:CreateTab("Статистика", 4483362458)
 local LogTab = Window:CreateTab("Логи", 4483362458)
 
--- Логи
 local LogParagraph = LogTab:CreateParagraph({ Title = "Системные логи", Content = "Ожидание запуска..." })
 
 local function updateLogUI()
     LogParagraph:Set({ Title = "Системные логи", Content = table.concat(LOGS, "\n") })
 end
 
--- ==================== 6. НОВЫЕ ФУНКЦИИ ====================
-
--- 6.1. Поиск ближайшего блока (вместо слепого прохода по сетке)
 local function findNearestBlock()
     local closestBlock = nil
     local minDistance = CONFIG.SEARCH_RADIUS
@@ -84,7 +69,7 @@ local function findNearestBlock()
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local rootPos = char.HumanoidRootPart.Position
 
-    -- Предполагаем, что блоки лежат в Workspace.Blocks. Если у вас другая папка - измените!
+    -- ВАЖНО: Измените Workspace.Blocks на название папки с рудой в вашей игре
     local blocksFolder = Workspace:FindFirstChild("Blocks") or Workspace:FindFirstChild("Ores") or Workspace
     for _, block in ipairs(blocksFolder:GetChildren()) do
         if block:IsA("BasePart") and block.Name ~= "Baseplate" then
@@ -98,7 +83,6 @@ local function findNearestBlock()
     return closestBlock
 end
 
--- 6.2. Проверка наличия бомб
 local function checkBombs()
     local char = LocalPlayer.Character
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -120,17 +104,13 @@ local function checkBombs()
     return true
 end
 
--- 6.3. Авто-продажа (ЗАГЛУШКА - адаптируйте под игру)
 local function attemptAutoSell()
     if not CONFIG.AUTO_SELL then return end
-    -- Вставьте сюда логику продажи для вашей игры. Например:
-    -- local sellRemote = ReplicatedStorage.Remotes.Sell
-    -- sellRemote:FireServer()
+    -- ВАЖНО: Вставьте сюда код продажи для вашей игры
     logMessage("Попытка авто-продажи...")
     task.wait(0.5)
 end
 
--- 6.4. Сохранение позиции
 local function saveCurrentPosition()
     if not CONFIG.SAVE_POSITION then return end
     local char = LocalPlayer.Character
@@ -140,7 +120,6 @@ local function saveCurrentPosition()
     end
 end
 
--- 6.5. Восстановление позиции
 local function restorePosition()
     if State.SavedPosition and CONFIG.SAVE_POSITION then
         local char = LocalPlayer.Character
@@ -151,7 +130,6 @@ local function restorePosition()
     end
 end
 
--- ==================== 7. ОСНОВНОЙ ЦИКЛ ФАРМА ====================
 local function farmLoop()
     logMessage("Запуск цикла фарма...")
     State.Status = "Фарм"
@@ -165,27 +143,18 @@ local function farmLoop()
 
         local targetBlock = findNearestBlock()
         if targetBlock then
-            logMessage("Найден блок: " .. targetBlock.Name .. " на расстоянии " .. math.floor((targetBlock.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude))
-            
-            -- Телепорт к блоку (если у вас есть функция телепорта, используйте её)
-            -- LocalPlayer.Character.HumanoidRootPart.CFrame = targetBlock.CFrame + Vector3.new(0, 5, 0)
+            logMessage("Найден блок: " .. targetBlock.Name)
             task.wait(CONFIG.DELAY)
-            
-            -- Логика установки бомбы (пример)
-            -- local bomb = LocalPlayer.Character:FindFirstChild(State.BombsLeft) or LocalPlayer.Backpack:FindFirstChild(State.BombsLeft)
-            -- if bomb then bomb.Parent = LocalPlayer.Character; bomb:Activate() end
-            
-            task.wait(1) -- Ожидание взрыва
+            task.wait(1)
         else
             logMessage("Блоки не найдены в радиусе. Ожидание...")
             task.wait(2)
         end
 
-        -- Проверка на телепорт наверх (сброс)
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
             State.CurrentY = math.floor(char.HumanoidRootPart.Position.Y)
-            if State.CurrentY > CONFIG.GREEN_MAX_Y + 100 then -- Условный порог "верха"
+            if State.CurrentY > CONFIG.GREEN_MAX_Y + 100 then
                 logMessage("Обнаружен телепорт наверх! Рестарт...")
                 saveCurrentPosition()
                 attemptAutoSell()
@@ -193,9 +162,6 @@ local function farmLoop()
                 if CONFIG.AUTO_RESTART then
                     State.IsRunning = false
                     task.wait(2)
-                    -- Здесь должен быть код перезапуска (например, выход в меню и вход заново)
-                    -- restorePosition()
-                    -- State.IsRunning = true
                 end
             end
         end
@@ -206,9 +172,6 @@ local function farmLoop()
     State.Status = "Остановлено"
 end
 
--- ==================== 8. НАСТРОЙКА GUI ====================
-
--- Главная вкладка
 MainTab:CreateToggle({
     Name = "Запустить фарм",
     CurrentValue = false,
@@ -239,7 +202,6 @@ MainTab:CreateButton({
     Callback = function() restorePosition() end
 })
 
--- Вкладка настроек (ИСПРАВЛЕНА ОШИБКА С X)
 SettingsTab:CreateSection("Порог высоты")
 SettingsTab:CreateSlider({
     Name = "GREEN_MAX_Y",
@@ -288,13 +250,11 @@ SettingsTab:CreateToggle({
     end
 })
 
--- Вкладка статистики
 local StatsParagraph = StatsTab:CreateParagraph({
     Title = "Текущий статус",
     Content = "Статус: Ожидание\nТекущий Y: 0\nЦелевой Y: 0\nБомбы: Неизвестно"
 })
 
--- Обновление статистики в реальном времени
 task.spawn(function()
     while true do
         task.wait(1)
@@ -310,7 +270,6 @@ task.spawn(function()
     end
 end)
 
--- Обновление UI логов
 task.spawn(function()
     while true do
         task.wait(2)
@@ -318,15 +277,12 @@ task.spawn(function()
     end
 end)
 
--- ==================== 9. ЗАПУСК ====================
 logMessage("Скрипт BAZZ v8 успешно загружен!")
-logMessage("Ожидание команд...")
 State.Status = "Готов"
 
--- Уведомление при старте
 Rayfield:Notify({
     Title = "BAZZ v8",
-    Content = "Скрипт успешно загружен. Откройте меню.",
+    Content = "Скрипт успешно загружен.",
     Duration = 5,
     Image = 4483362458
 })
