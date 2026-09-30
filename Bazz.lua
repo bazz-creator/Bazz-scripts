@@ -1,3 +1,5 @@
+getgenv().SecureMode = true
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -35,7 +37,7 @@ local State = {
 }
 
 local RayfieldSuccess, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    return loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
 end)
 
 if not RayfieldSuccess or not Rayfield then
