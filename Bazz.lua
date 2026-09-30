@@ -21,7 +21,6 @@ local CONFIG = {
     FORCE_BOMB = "auto",
     AUTO_FARM = false,
     ZONE_NAME = "__Zone_8",
-    -- Рестарт по Y
     TELEPORT_CHECK_FROM_Y = -120,
     TELEPORT_DETECT_ABOVE_Y = -10,
 }
@@ -29,9 +28,6 @@ local CONFIG = {
 local ORE_ID   = "Eclipse Onyx Gem"
 local ORE_NAME = "Eclipse Onyx"
 
--- =====================
--- WORLD_SPOTS (точки входа в ивент)
--- =====================
 local WORLD_SPOTS = {
     [8737899170]      = {pos = Vector3.new(179.04, 16.24, -142.15)},
     [16498369169]     = {pos = Vector3.new(-9954.08, 16.54, -287.74)},
@@ -39,9 +35,6 @@ local WORLD_SPOTS = {
     [140403681187145] = {pos = Vector3.new(-15848.54, 39.92, -193.16)},
 }
 
--- =====================
--- МОДУЛИ
--- =====================
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
@@ -71,9 +64,7 @@ if Network then
     end)
 end
 
--- =====================
--- ANTI-AFK (новое)
--- =====================
+-- ANTI-AFK
 task.spawn(function()
     LocalPlayer.Idled:Connect(function()
         pcall(function()
@@ -87,7 +78,6 @@ task.spawn(function()
         end)
     end)
 
-    -- Прыжок каждые 30 сек
     while true do
         task.wait(30)
         pcall(function()
@@ -100,9 +90,6 @@ task.spawn(function()
     end
 end)
 
--- =====================
--- БОМБЫ
--- =====================
 local BOMB_UIDS = { green = nil, yellow = nil }
 
 local function findBombUIDs()
@@ -146,9 +133,6 @@ repeat task.wait(0.1) until Save and Save.Get() and Save.Get().Inventory and Sav
 local START_GREEN, START_YELLOW = countBombs("green"), countBombs("yellow")
 local START_ORE, START_TIME = countOre(), tick()
 
--- =====================
--- RAYFIELD GUI
--- =====================
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -182,7 +166,7 @@ MainTab:CreateToggle({
 
 MainTab:CreateSection("Режим бомб")
 MainTab:CreateToggle({Name="Force Green (Drill Array)", CurrentValue=false, Flag="ForceGreen",
-    Callback=function(v)X if v then CONFIG.FORCE_BOMB="green" else CONFIG.FORCE_BOMB="auto" end end})
+    Callback=function(v) if v then CONFIG.FORCE_BOMB="green" else CONFIG.FORCE_BOMB="auto" end end})
 MainTab:CreateToggle({Name="Force Yellow (Core Charge)", CurrentValue=false, Flag="ForceYellow",
     Callback=function(v) if v then CONFIG.FORCE_BOMB="yellow" else CONFIG.FORCE_BOMB="auto" end end})
 
@@ -248,9 +232,6 @@ task.spawn(function()
     end
 end)
 
--- =====================
--- ФАРМ
--- =====================
 local LP = LocalPlayer
 local world, region, origin
 
@@ -298,14 +279,12 @@ local function getRadius(key)
     else return CONFIG.RADIUS_YELLOW_X, CONFIG.RADIUS_YELLOW_Z end
 end
 
--- ДВУХШАГОВЫЙ ВХОД
 local function enterMine()
     if BWC.GetLocal() then
         print("Уже в шахте")
         return true
     end
 
-    -- WORLD_SPOTS: телепорт на точку входа в ивент
     local spot = WORLD_SPOTS[game.PlaceId]
     if spot then
         print("Телепорт на точку входа в ивент")
@@ -313,7 +292,6 @@ local function enterMine()
         task.wait(3)
     end
 
-    -- Шаг 1: вход в ивент
     if Instancing then
         pcall(function()
             Instancing:InvokeServer("SpaceMiningEvent")
@@ -322,7 +300,6 @@ local function enterMine()
         task.wait(12)
     end
 
-    -- Шаг 2: телепорт в #8
     if TeleportsInstance then
         local ok, result = pcall(function()
             return TeleportsInstance:InvokeServer(CONFIG.ZONE_NAME)
@@ -336,9 +313,6 @@ end
 
 getgenv().BazzEnterMine = enterMine
 
--- =====================
--- РЕСТАРТ ПО Y (новое)
--- =====================
 local wentBelowCheckY = false
 
 local function wasTeleportedToTop()
@@ -359,9 +333,6 @@ local function wasTeleportedToTop()
     return false
 end
 
--- =====================
--- WAIT FOR NEW BLOCKS (новое)
--- =====================
 local function waitForNewBlocks()
     local attempts = 0
     repeat
@@ -419,10 +390,8 @@ local function farmOnce()
         return false
     end
 
-    -- Сбрасываем флаг рестарта
     wentBelowCheckY = false
 
-    -- Ждём появления блоков
     if not waitForNewBlocks() then
         getgenv().statusText = "блоки не появились"
         return false
@@ -434,7 +403,7 @@ local function farmOnce()
         getgenv().curZ = region.Min.Z
     end
 
-    getgenv().cur = tonumber(getgenv().curX) or region.Min.X
+    getgenv().curX = tonumber(getgenv().curX) or region.Min.X
     getgenv().curY = tonumber(getgenv().curY) or region.Max.Y
     getgenv().curZ = tonumber(getgenv().curZ) or region.Min.Z
 
@@ -443,7 +412,6 @@ local function farmOnce()
     while getgenv().curY >= region.Min.Y do
         if not getgenv().MagnusRunning then return false end
 
-        -- Проверка рестарта по Y
         if wasTeleportedToTop() then
             print("РЕСТАРТ! Вышел из farmOnce")
             getgenv().statusText = "рестарт локации"
@@ -521,9 +489,6 @@ local function farmOnce()
     return true
 end
 
--- =====================
--- СТАРТ/СТОП
--- =====================
 local function startFarm()
     if getgenv().MagnusThread and coroutine.status(getgenv().MagnusThread) ~= "dead" then return end
 
