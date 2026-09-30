@@ -1,8 +1,10 @@
 -- ==========================================
--- BAZZ — ECLIPSE RIFT (FINAL v6)
--- Авто-вход в ивент → переход в #8 → фарм
+-- BAZZ — ECLIPSE RIFT (FINAL v7)
+-- + Anti-AFK + WORLD_SPOTS + рестарт по Y
+-- + waitForNewBlocks + полная проверка карты
+-- БЕЗ АВТОЗАПУСКА, БЕЗ КЛЮЧА
 -- ==========================================
-print("🚀 BAZZ FINAL v6")
+print("🚀 BAZZ FINAL v7")
 
 local CONFIG = {
     TP_SETTLE = 0.02,
@@ -19,12 +21,32 @@ local CONFIG = {
     FORCE_BOMB = "auto",
     AUTO_FARM = false,
     ZONE_NAME = "__Zone_8",
+    -- Рестарт по Y
+    TELEPORT_CHECK_FROM_Y = -120,
+    TELEPORT_DETECT_ABOVE_Y = -10,
 }
 
 local ORE_ID   = "Eclipse Onyx Gem"
 local ORE_NAME = "Eclipse Onyx"
 
+-- =====================
+-- WORLD_SPOTS (точки входа в ивент)
+-- =====================
+local WORLD_SPOTS = {
+    [8737899170]      = {pos = Vector3.new(179.04, 16.24, -142.15)},
+    [16498369169]     = {pos = Vector3.new(-9954.08, 16.54, -287.74)},
+    [17503543197]     = {pos = Vector3.new(-10256.35, 4.17, -7300.98)},
+    [140403681187145] = {pos = Vector3.new(-15848.54, 39.92, -193.16)},
+}
+
+-- =====================
+-- МОДУЛИ
+-- =====================
+local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
 local Network = nil
 pcall(function() Network = RS:WaitForChild("Network", 10) end)
 
@@ -49,6 +71,38 @@ if Network then
     end)
 end
 
+-- =====================
+-- ANTI-AFK (новое)
+-- =====================
+task.spawn(function()
+    LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.Jump = true end
+            end
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(Vector2.new(0, 0))
+        end)
+    end)
+
+    -- Прыжок каждые 30 сек
+    while true do
+        task.wait(30)
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.Jump = true end
+            end
+        end)
+    end
+end)
+
+-- =====================
+-- БОМБЫ
+-- =====================
 local BOMB_UIDS = { green = nil, yellow = nil }
 
 local function findBombUIDs()
@@ -92,6 +146,9 @@ repeat task.wait(0.1) until Save and Save.Get() and Save.Get().Inventory and Sav
 local START_GREEN, START_YELLOW = countBombs("green"), countBombs("yellow")
 local START_ORE, START_TIME = countOre(), tick()
 
+-- =====================
+-- RAYFIELD GUI
+-- =====================
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -125,7 +182,7 @@ MainTab:CreateToggle({
 
 MainTab:CreateSection("Режим бомб")
 MainTab:CreateToggle({Name="Force Green (Drill Array)", CurrentValue=false, Flag="ForceGreen",
-    Callback=function(v) if v then CONFIG.FORCE_BOMB="green" else CONFIG.FORCE_BOMB="auto" end end})
+    Callback=function(v)X if v then CONFIG.FORCE_BOMB="green" else CONFIG.FORCE_BOMB="auto" end end})
 MainTab:CreateToggle({Name="Force Yellow (Core Charge)", CurrentValue=false, Flag="ForceYellow",
     Callback=function(v) if v then CONFIG.FORCE_BOMB="yellow" else CONFIG.FORCE_BOMB="auto" end end})
 
@@ -191,7 +248,10 @@ task.spawn(function()
     end
 end)
 
-local LP = game.Players.LocalPlayer
+-- =====================
+-- ФАРМ
+-- =====================
+local LP = LocalPlayer
 local world, region, origin
 
 getgenv().MagnusRunning = false
@@ -238,12 +298,22 @@ local function getRadius(key)
     else return CONFIG.RADIUS_YELLOW_X, CONFIG.RADIUS_YELLOW_Z end
 end
 
+-- ДВУХШАГОВЫЙ ВХОД
 local function enterMine()
     if BWC.GetLocal() then
         print("Уже в шахте")
         return true
     end
 
+    -- WORLD_SPOTS: телепорт на точку входа в ивент
+    local spot = WORLD_SPOTS[game.PlaceId]
+    if spot then
+        print("Телепорт на точку входа в ивент")
+        tp(spot.pos)
+        task.wait(3)
+    end
+
+    -- Шаг 1: вход в ивент
     if Instancing then
         pcall(function()
             Instancing:InvokeServer("SpaceMiningEvent")
@@ -252,6 +322,7 @@ local function enterMine()
         task.wait(12)
     end
 
+    -- Шаг 2: телепорт в #8
     if TeleportsInstance then
         local ok, result = pcall(function()
             return TeleportsInstance:InvokeServer(CONFIG.ZONE_NAME)
@@ -264,6 +335,52 @@ local function enterMine()
 end
 
 getgenv().BazzEnterMine = enterMine
+
+-- =====================
+-- РЕСТАРТ ПО Y (новое)
+-- =====================
+local wentBelowCheckY = false
+
+local function wasTeleportedToTop()
+    local hrp = getHRP()
+    if not hrp then return false end
+    local posY = hrp.Position.Y
+
+    if not wentBelowCheckY then
+        if posY < CONFIG.TELEPORT_CHECK_FROM_Y then
+            wentBelowCheckY = true
+        end
+        return false
+    end
+
+    if posY > CONFIG.TELEPORT_DETECT_ABOVE_Y then
+        return true
+    end
+    return false
+end
+
+-- =====================
+-- WAIT FOR NEW BLOCKS (новое)
+-- =====================
+local function waitForNewBlocks()
+    local attempts = 0
+    repeat
+        task.wait(0.5)
+        local currentWorld = BWC.GetLocal()
+        if currentWorld then
+            local wRegion = currentWorld:GetRegion()
+            local wStartX = wRegion.Min.X + 1
+            local wStartZ = wRegion.Min.Z + 1
+            for checkY = wRegion.Max.Y, wRegion.Min.Y, -1 do
+                if currentWorld:GetBlock(Vector3int16.new(wStartX, checkY, wStartZ)) then
+                    return true
+                end
+            end
+        end
+        attempts = attempts + 1
+    until attempts > 240
+    return false
+end
 
 local function farmOnce()
     world = BWC.GetLocal()
@@ -302,38 +419,14 @@ local function farmOnce()
         return false
     end
 
-    local worldSignature = region.Max.Y
+    -- Сбрасываем флаг рестарта
+    wentBelowCheckY = false
 
-    getgenv().statusText = "прогрузка шахты..."
-    task.wait(CONFIG.WORLD_RESET_DELAY)
-
-    local cx = region.Min.X + 1
-    local cz = region.Min.Z + 1
-    local midY = math.floor((region.Max.Y + region.Min.Y) / 2)
-    local botY = region.Min.Y + 1
-
-    local waitStart = tick()
-    local loaded = false
-    while tick() - waitStart < CONFIG.WORLD_LOAD_MAX do
-        local okTop, top = pcall(function() return world:GetBlock(Vector3int16.new(cx, region.Max.Y, cz)) end)
-        local okMid, mid = pcall(function() return world:GetBlock(Vector3int16.new(cx, midY, cz)) end)
-        local okBot, bot = pcall(function() return world:GetBlock(Vector3int16.new(cx, botY, cz)) end)
-
-        if okTop and top and okMid and mid and okBot and bot then
-            loaded = true
-            break
-        end
-
-        getgenv().statusText = "загрузка карты... "..math.floor(tick() - waitStart).."с"
-        task.wait(0.3)
-    end
-
-    if not loaded then
-        getgenv().statusText = "карта не загрузилась"
+    -- Ждём появления блоков
+    if not waitForNewBlocks() then
+        getgenv().statusText = "блоки не появились"
         return false
     end
-
-    task.wait(1)
 
     if not getgenv().curY or not getgenv().curX or not getgenv().curZ then
         getgenv().curY = region.Max.Y
@@ -341,7 +434,7 @@ local function farmOnce()
         getgenv().curZ = region.Min.Z
     end
 
-    getgenv().curX = tonumber(getgenv().curX) or region.Min.X
+    getgenv().cur = tonumber(getgenv().curX) or region.Min.X
     getgenv().curY = tonumber(getgenv().curY) or region.Max.Y
     getgenv().curZ = tonumber(getgenv().curZ) or region.Min.Z
 
@@ -350,15 +443,16 @@ local function farmOnce()
     while getgenv().curY >= region.Min.Y do
         if not getgenv().MagnusRunning then return false end
 
+        -- Проверка рестарта по Y
+        if wasTeleportedToTop() then
+            print("РЕСТАРТ! Вышел из farmOnce")
+            getgenv().statusText = "рестарт локации"
+            return true
+        end
+
         local w = BWC.GetLocal()
         if not w then
             getgenv().statusText = "шахта пропала"
-            return false
-        end
-
-        local r = w:GetRegion()
-        if r and r.Max.Y ~= worldSignature then
-            getgenv().statusText = "мир сменился"
             return false
         end
 
@@ -381,6 +475,11 @@ local function farmOnce()
                 if tick() - lastProgress > CONFIG.TIMEOUT_SEC then
                     getgenv().statusText = "таймаут"
                     return false
+                end
+
+                if wasTeleportedToTop() then
+                    print("РЕСТАРТ во время прохода!")
+                    return true
                 end
 
                 local pos = Vector3int16.new(getgenv().curX, getgenv().curY, getgenv().curZ)
@@ -419,9 +518,12 @@ local function farmOnce()
 
     getgenv().curX, getgenv().curY, getgenv().curZ = nil, nil, nil
     getgenv().statusText = "цикл завершён"
-    return false
+    return true
 end
 
+-- =====================
+-- СТАРТ/СТОП
+-- =====================
 local function startFarm()
     if getgenv().MagnusThread and coroutine.status(getgenv().MagnusThread) ~= "dead" then return end
 
@@ -431,8 +533,12 @@ local function startFarm()
 
         while getgenv().MagnusRunning do
             if CONFIG.AUTO_FARM then
-                local ok = farmOnce()
-                if not ok and getgenv().MagnusRunning then task.wait(3) else task.wait(CONFIG.REST_WAIT) end
+                local ok, err = pcall(farmOnce)
+                if not ok then
+                    warn("Ошибка в farmOnce:", err)
+                    task.wait(2)
+                end
+                if getgenv().MagnusRunning then task.wait(CONFIG.REST_WAIT) end
             else
                 task.wait(1)
             end
@@ -473,4 +579,4 @@ game:GetService("UserInputService").InputBegan:Connect(function(i, g)
     end
 end)
 
-print("BAZZ FINAL v6 загружен. Вход: ивент → #8. Нажми 'Auto Farm'.")
+print("BAZZ FINAL v7 загружен. Anti-AFK + WORLD_SPOTS + рестарт по Y. Нажми 'Auto Farm'.")
